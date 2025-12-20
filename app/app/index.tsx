@@ -21,11 +21,92 @@ import { theme } from "../src/config/theme"
 
 const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
+/**
+ * Calculate the next occurrence date for a task based on current time and repeat rules.
+ * For single tasks, returns the dueTime date.
+ * For daily tasks, returns today (or tomorrow if time already passed).
+ * For weekly tasks, returns the next matching day (including today if time hasn't passed).
+ */
+const getNextOccurrence = (task: Task): Date => {
+  const dueDate = new Date(task.dueTime)
+  const dueHours = dueDate.getHours()
+  const dueMinutes = dueDate.getMinutes()
+  const dueSeconds = dueDate.getSeconds()
+
+  // Single tasks or no repeat frequency
+  if (task.type === "single" || !task.repeatFrequency) {
+    return dueDate
+  }
+
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+  if (task.repeatFrequency === "daily") {
+    // Create today's date with the task's time
+    const candidate = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      dueHours,
+      dueMinutes,
+      dueSeconds,
+    )
+    // If time already passed today, move to tomorrow
+    if (candidate.getTime() < now.getTime()) {
+      candidate.setDate(candidate.getDate() + 1)
+    }
+    return candidate
+  }
+
+  // Weekly tasks
+  if (task.repeatFrequency === "weekly") {
+    // Determine which days to repeat on
+    let repeatDays = task.repeatDays
+    if (!repeatDays || repeatDays.length === 0) {
+      // Fallback for old tasks: use the day of the original due date
+      repeatDays = [dueDate.getDay()]
+    }
+
+    // Remove duplicates and sort
+    repeatDays = [...new Set(repeatDays)]
+    repeatDays.sort((a, b) => a - b)
+
+    const todayDay = now.getDay() // 0-6, Sunday=0
+
+    // Check next 7 days starting from today
+    for (let d = 0; d <= 7; d++) {
+      const day = (todayDay + d) % 7
+      if (repeatDays.includes(day)) {
+        const candidate = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate() + d,
+          dueHours,
+          dueMinutes,
+          dueSeconds,
+        )
+        // If this is today and time has already passed, skip to next matching day
+        if (d === 0 && candidate.getTime() < now.getTime()) {
+          continue
+        }
+        return candidate
+      }
+    }
+
+    // Should never reach here if repeatDays is non-empty
+    // Fallback to due date
+    return dueDate
+  }
+
+  // Unknown repeat frequency, return due date
+  return dueDate
+}
+
 // Helper to Group Tasks by Date (for the list headers)
 const groupTasksByDate = (tasks: Task[]) => {
     const groups: { [key: string]: Task[] } = {}
     tasks.forEach((task) => {
-        const date = new Date(task.dueTime)
+        const date = getNextOccurrence(task)
         const dateKey = date.toLocaleDateString([], {
             weekday: "short",
             month: "short",
@@ -46,7 +127,7 @@ export default function Home() {
         const data = await getTasks()
         data.sort(
             (a, b) =>
-                new Date(a.dueTime).getTime() - new Date(b.dueTime).getTime(),
+                getNextOccurrence(a).getTime() - getNextOccurrence(b).getTime(),
         )
         setSections(groupTasksByDate(data))
         setLoading(false)
