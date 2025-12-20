@@ -1,7 +1,7 @@
 // app/_layout.tsx
 import { useEffect, useState } from "react"
-import { View, ActivityIndicator } from "react-native"
-import { Stack } from "expo-router"
+import { View, ActivityIndicator, TouchableOpacity, Text } from "react-native"
+import { Stack, Link } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
 import { initDB } from "../src/services/db"
@@ -53,10 +53,36 @@ export default function Layout() {
                     headerShadowVisible: false, // No ugly line under header
                 }}
             >
-                <Stack.Screen name="index" options={{ title: "My Tasks" }} />
+                <Stack.Screen
+                    name="index"
+                    options={{
+                        title: "My Tasks",
+                        headerRight: () => (
+                            <Link href="/diagnostics" asChild>
+                                <TouchableOpacity
+                                    style={{ marginRight: 16, padding: 4 }}
+                                >
+                                    <Text
+                                        style={{
+                                            color: theme.colors.primary,
+                                            fontWeight: "600",
+                                            fontSize: 16,
+                                        }}
+                                    >
+                                        🔧
+                                    </Text>
+                                </TouchableOpacity>
+                            </Link>
+                        ),
+                    }}
+                />
                 <Stack.Screen
                     name="add"
                     options={{ title: "New Task", presentation: "modal" }}
+                />
+                <Stack.Screen
+                    name="diagnostics"
+                    options={{ title: "Diagnostics", presentation: "modal" }}
                 />
             </Stack>
         </GestureHandlerRootView>
