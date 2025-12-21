@@ -155,3 +155,121 @@ export const updateTaskStatus = async (id: string, isCompleted: boolean) => {
         id,
     ])
 }
+
+// 10. Export all tasks as JSON
+export const exportTasks = async (): Promise<string> => {
+    const tasks = await getTasks()
+    const exportData = {
+        version: "1.0",
+        exportDate: new Date().toISOString(),
+        count: tasks.length,
+        tasks: tasks.map(task => ({
+            ...task,
+            // Ensure repeatDays is always an array
+            repeatDays: task.repeatDays || [],
+            // Ensure icon has a default
+            icon: task.icon || "📝",
+        }))
+    }
+    return JSON.stringify(exportData, null, 2)
+}
+
+// 11. Import tasks from JSON
+export const importTasks = async (jsonData: string): Promise<{success: boolean, imported: number, errors: string[]}> => {
+    const errors: string[] = []
+    let imported = 0
+
+    try {
+        const data = JSON.parse(jsonData)
+
+        // Validate basic structure
+        if (!data.tasks || !Array.isArray(data.tasks)) {
+            throw new Error("Invalid import format: missing tasks array")
+        }
+
+        const db = await getDBConnection()
+
+        // Start a transaction for batch import
+        await db.execAsync("BEGIN TRANSACTION")
+
+        try {
+            for (const task of data.tasks) {
+                // Validate required fields
+                if (!task.id || !task.title || !task.dueTime || !task.type) {
+                    errors.push(`Skipping task: missing required fields (id: ${task.id || 'missing'})`)
+                    continue
+                }
+
+                // Check if task already exists
+                const existing = await db.getAllAsync<any>(
+                    "SELECT id FROM tasks WHERE id = ?",
+                    [task.id]
+                )
+
+                if (existing.length > 0) {
+                    // Update existing task
+                    await db.runAsync(
+                        `UPDATE tasks SET
+                         title = ?,
+                         dueTime = ?,
+                         type = ?,
+                         repeatFrequency = ?,
+                         repeatDays = ?,
+                         isCompleted = ?,
+                         notificationId = ?,
+                         icon = ?
+                         WHERE id = ?`,
+                        [
+                            task.title,
+                            task.dueTime,
+                            task.type,
+                            task.repeatFrequency || null,
+                            JSON.stringify(task.repeatDays || []),
+                            task.isCompleted || 0,
+                            task.notificationId || null,
+                            task.icon || "📝",
+                            task.id
+                        ]
+                    )
+                } else {
+                    // Insert new task
+                    await db.runAsync(
+                        `INSERT INTO tasks (
+                         id, title, dueTime, type, repeatFrequency,
+                         repeatDays, isCompleted, notificationId, icon
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [
+                            task.id,
+                            task.title,
+                            task.dueTime,
+                            task.type,
+                            task.repeatFrequency || null,
+                            JSON.stringify(task.repeatDays || []),
+                            task.isCompleted || 0,
+                            task.notificationId || null,
+                            task.icon || "📝"
+                        ]
+                    )
+                }
+                imported++
+            }
+
+            await db.execAsync("COMMIT")
+            return { success: true, imported, errors }
+
+        } catch (error) {
+            await db.execAsync("ROLLBACK")
+            throw error
+        }
+
+    } catch (error) {
+        errors.push(`Import failed: ${error instanceof Error ? error.message : String(error)}`)
+        return { success: false, imported: 0, errors }
+    }
+}
+
+// 12. Clear all tasks (optional, for testing)
+export const clearAllTasks = async (): Promise<void> => {
+    const db = await getDBConnection()
+    await db.execAsync("DELETE FROM tasks")
+}

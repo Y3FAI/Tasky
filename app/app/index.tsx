@@ -24,8 +24,8 @@ const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 /**
  * Calculate the next occurrence date for a task based on current time and repeat rules.
  * For single tasks, returns the dueTime date.
- * For daily tasks, returns today (or tomorrow if time already passed).
- * For weekly tasks, returns the next matching day (including today if time hasn't passed).
+ * For daily tasks, returns today (tasks stay under today even if time has passed).
+ * For weekly tasks, returns the next matching day (including today even if time has passed).
  */
 const getNextOccurrence = (task: Task): Date => {
   const dueDate = new Date(task.dueTime)
@@ -51,10 +51,7 @@ const getNextOccurrence = (task: Task): Date => {
       dueMinutes,
       dueSeconds,
     )
-    // If time already passed today, move to tomorrow
-    if (candidate.getTime() < now.getTime()) {
-      candidate.setDate(candidate.getDate() + 1)
-    }
+    // Keep task under today even if time has passed
     return candidate
   }
 
@@ -85,10 +82,6 @@ const getNextOccurrence = (task: Task): Date => {
           dueMinutes,
           dueSeconds,
         )
-        // If this is today and time has already passed, skip to next matching day
-        if (d === 0 && candidate.getTime() < now.getTime()) {
-          continue
-        }
         return candidate
       }
     }

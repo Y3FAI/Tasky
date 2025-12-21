@@ -7,6 +7,7 @@ import {
     ScrollView,
     ActivityIndicator,
     Alert,
+    TextInput,
 } from "react-native"
 import {
     checkNotificationStatus,
@@ -14,8 +15,10 @@ import {
     sendTestNotification,
     debugScheduledNotifications,
 } from "../services/notifications"
+import { exportTasks, importTasks } from "../services/db"
 import { theme } from "../config/theme"
 import * as Haptics from "expo-haptics"
+import * as Clipboard from "expo-clipboard"
 
 interface NotificationDiagnosticsProps {
     onClose?: () => void
@@ -29,6 +32,10 @@ export const NotificationDiagnosticsPanel: React.FC<NotificationDiagnosticsProps
     )
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
+    const [exportData, setExportData] = useState<string>("")
+    const [importText, setImportText] = useState<string>("")
+    const [importing, setImporting] = useState(false)
+    const [exporting, setExporting] = useState(false)
 
     const loadDiagnostics = async () => {
         setRefreshing(true)
@@ -70,6 +77,84 @@ export const NotificationDiagnosticsPanel: React.FC<NotificationDiagnosticsProps
             await fix.action()
             // Refresh after action
             setTimeout(loadDiagnostics, 1000)
+        }
+    }
+
+    const handleExport = async () => {
+        Haptics.selectionAsync()
+        setExporting(true)
+        try {
+            const data = await exportTasks()
+            setExportData(data)
+
+            // Copy to clipboard
+            await Clipboard.setStringAsync(data)
+
+            Alert.alert(
+                "Export Successful",
+                `Exported ${JSON.parse(data).count} tasks. The JSON has been copied to clipboard.\n\nYou can paste it anywhere for backup.`,
+                [{ text: "OK" }]
+            )
+        } catch (error) {
+            console.error("Export failed:", error)
+            Alert.alert("Export Failed", "Failed to export tasks. Check console for details.")
+        } finally {
+            setExporting(false)
+        }
+    }
+
+    const handleImport = async () => {
+        Haptics.selectionAsync()
+        if (!importText.trim()) {
+            Alert.alert("Import Error", "Please paste JSON data first")
+            return
+        }
+
+        setImporting(true)
+        try {
+            const result = await importTasks(importText)
+
+            if (result.success) {
+                Alert.alert(
+                    "Import Successful",
+                    `Imported ${result.imported} tasks successfully.${
+                        result.errors.length > 0 ?
+                        `\n\nNote: ${result.errors.length} error(s):\n${result.errors.slice(0, 3).join('\n')}` :
+                        ''
+                    }`,
+                    [{ text: "OK", onPress: () => {
+                        // Clear import text after successful import
+                        setImportText("")
+                        // Refresh tasks in parent component if needed
+                    }}]
+                )
+            } else {
+                Alert.alert(
+                    "Import Failed",
+                    `Failed to import tasks:\n${result.errors.join('\n')}`
+                )
+            }
+        } catch (error) {
+            console.error("Import failed:", error)
+            Alert.alert("Import Failed", "Failed to import tasks. Check console for details.")
+        } finally {
+            setImporting(false)
+        }
+    }
+
+    const handlePasteFromClipboard = async () => {
+        Haptics.selectionAsync()
+        try {
+            const text = await Clipboard.getStringAsync()
+            if (text) {
+                setImportText(text)
+                Alert.alert("Pasted", "JSON data pasted from clipboard")
+            } else {
+                Alert.alert("Clipboard Empty", "No text found in clipboard")
+            }
+        } catch (error) {
+            console.error("Failed to read clipboard:", error)
+            Alert.alert("Clipboard Error", "Failed to read from clipboard")
         }
     }
 
@@ -199,6 +284,79 @@ export const NotificationDiagnosticsPanel: React.FC<NotificationDiagnosticsProps
                     ))}
                 </View>
             )}
+
+            {/* Data Backup */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Data Backup</Text>
+
+                <View style={styles.backupCard}>
+                    <Text style={styles.backupTitle}>Export Tasks</Text>
+                    <Text style={styles.backupDescription}>
+                        Export all tasks as JSON for backup. The data will be copied to clipboard.
+                    </Text>
+                    <TouchableOpacity
+                        style={[styles.backupButton, exporting && styles.disabledButton]}
+                        onPress={handleExport}
+                        disabled={exporting}
+                    >
+                        {exporting ? (
+                            <ActivityIndicator size="small" color={theme.colors.background} />
+                        ) : (
+                            <Text style={styles.backupButtonText}>
+                                Export Tasks to Clipboard
+                            </Text>
+                        )}
+                    </TouchableOpacity>
+                    {exportData ? (
+                        <Text style={styles.exportInfo}>
+                            ✓ {JSON.parse(exportData).count} tasks exported
+                        </Text>
+                    ) : null}
+                </View>
+
+                <View style={styles.backupCard}>
+                    <Text style={styles.backupTitle}>Import Tasks</Text>
+                    <Text style={styles.backupDescription}>
+                        Paste JSON data to import tasks. Existing tasks with same IDs will be updated.
+                    </Text>
+
+                    <TextInput
+                        style={styles.textInput}
+                        value={importText}
+                        onChangeText={setImportText}
+                        placeholder="Paste JSON data here..."
+                        placeholderTextColor={theme.colors.textDim}
+                        multiline
+                        numberOfLines={6}
+                        textAlignVertical="top"
+                    />
+
+                    <View style={styles.buttonRow}>
+                        <TouchableOpacity
+                            style={[styles.backupButton, styles.secondaryButton]}
+                            onPress={handlePasteFromClipboard}
+                        >
+                            <Text style={styles.secondaryButtonText}>Paste from Clipboard</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.backupButton, importing && styles.disabledButton]}
+                            onPress={handleImport}
+                            disabled={importing}
+                        >
+                            {importing ? (
+                                <ActivityIndicator size="small" color={theme.colors.background} />
+                            ) : (
+                                <Text style={styles.backupButtonText}>Import Tasks</Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+
+                    <Text style={styles.importNote}>
+                        Note: Task IDs must be preserved for proper updates. Notifications will need to be recreated.
+                    </Text>
+                </View>
+            </View>
 
             {/* Actions */}
             <View style={styles.section}>
@@ -441,5 +599,79 @@ const styles = StyleSheet.create({
     closeButtonText: {
         color: theme.colors.text,
         fontWeight: "bold",
+    },
+    // Data Backup styles
+    backupCard: {
+        backgroundColor: theme.colors.surface,
+        padding: theme.spacing.m,
+        borderRadius: theme.borderRadius,
+        marginBottom: theme.spacing.l,
+    },
+    backupTitle: {
+        fontSize: 16,
+        fontWeight: "bold",
+        color: theme.colors.text,
+        marginBottom: 8,
+    },
+    backupDescription: {
+        fontSize: 14,
+        color: theme.colors.textDim,
+        marginBottom: theme.spacing.m,
+        lineHeight: 20,
+    },
+    backupButton: {
+        backgroundColor: theme.colors.primary,
+        paddingHorizontal: theme.spacing.m,
+        paddingVertical: 12,
+        borderRadius: 8,
+        alignItems: "center",
+        marginBottom: theme.spacing.s,
+    },
+    backupButtonText: {
+        color: theme.colors.background,
+        fontWeight: "bold",
+        fontSize: 14,
+    },
+    secondaryButton: {
+        backgroundColor: theme.colors.surface,
+        borderWidth: 1,
+        borderColor: theme.colors.primary,
+    },
+    secondaryButtonText: {
+        color: theme.colors.primary,
+        fontWeight: "bold",
+        fontSize: 14,
+    },
+    disabledButton: {
+        opacity: 0.6,
+    },
+    exportInfo: {
+        fontSize: 14,
+        color: theme.colors.primary,
+        textAlign: "center",
+        marginTop: 4,
+    },
+    textInput: {
+        backgroundColor: theme.colors.background,
+        borderWidth: 1,
+        borderColor: theme.colors.surface,
+        borderRadius: 8,
+        padding: theme.spacing.m,
+        fontSize: 14,
+        color: theme.colors.text,
+        marginBottom: theme.spacing.m,
+        minHeight: 120,
+    },
+    buttonRow: {
+        flexDirection: "row",
+        gap: theme.spacing.s,
+        marginBottom: theme.spacing.s,
+    },
+    importNote: {
+        fontSize: 12,
+        color: theme.colors.textDim,
+        fontStyle: "italic",
+        textAlign: "center",
+        marginTop: theme.spacing.s,
     },
 })

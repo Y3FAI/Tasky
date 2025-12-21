@@ -29,7 +29,7 @@ export default function EditTask() {
         date: Date,
         repeatMode: "none" | "daily" | "weekly",
         repeatDays: number[],
-        icon?: string,
+        icon: string,
     ) => {
         if (!task) return
 
@@ -57,6 +57,7 @@ export default function EditTask() {
                 repeatFrequency: frequency,
                 repeatDays: repeatMode === "weekly" ? repeatDays : undefined,
                 notificationId: newNotificationIds,
+                icon,
             }
 
             await updateTask(updatedTask)
@@ -91,6 +92,7 @@ export default function EditTask() {
                 initialDate={new Date(task.dueTime)}
                 initialRepeatMode={task.repeatFrequency || "none"}
                 initialRepeatDays={task.repeatDays}
+                initialIcon={task.icon}
                 onSubmit={handleUpdate}
             />
         </>

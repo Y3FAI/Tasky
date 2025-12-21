@@ -12,7 +12,7 @@ export default function AddTask() {
         date: Date,
         repeatMode: "none" | "daily" | "weekly",
         repeatDays: number[],
-        icon?: string,
+        icon: string,
     ) => {
         if (!title.trim()) {
             Alert.alert("Validation", "Please enter a task title")
@@ -40,7 +40,7 @@ export default function AddTask() {
                 repeatDays: repeatMode === "weekly" ? repeatDays : undefined,
                 isCompleted: 0,
                 notificationId: notificationIds, // This is now a JSON string "['id1', 'id2']"
-                icon: icon || "📝",
+                icon,
             }
 
             await addTask(newTask)
