@@ -1,6 +1,6 @@
 # Tasky
 
-**Local-first scheduler for complex recurring tasks.**
+**Local-first todo app for recurring tasks.**
 
 Most todo apps fail at two things: custom repetition and reliable alerts. Tasky solves this by building a dedicated scheduling engine rather than relying on standard system alarms.
 
